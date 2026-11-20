@@ -1,0 +1,830 @@
+[
+  {
+    "id": "ExecLeadTriage01",
+    "name": "Executive Lead Intake, 6-Tier Dedup & AI Triage (Master)",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "prospect-ingest",
+          "responseMode": "onReceived",
+          "options": {}
+        },
+        "id": "node-1-webhook-ingest",
+        "name": "Lead Ingest Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          120,
+          240
+        ],
+        "webhookId": "exec-lead-ingest-webhook"
+      },
+      {
+        "parameters": {},
+        "id": "node-2-manual-trigger",
+        "name": "Manual Test Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          120,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Normalize Inbound Raw Prospects (handles single object, array, or manual test data)\nconst raw = $input.all();\nlet items = [];\n\nif (raw.length === 1 && raw[0].json && Object.keys(raw[0].json).length === 0) {\n  // Triggered manually without body -> provide high-value test lead\n  items = [\n    {\n      fullName: 'Dr. Gregory House',\n      company: 'House Executive Leadership',\n      jobTitle: 'Founder & Senior Executive Leadership Coach',\n      website: 'https://houseleadership.com',\n      linkedInUrl: 'https://linkedin.com/in/ghouse-exec',\n      email: 'lead4@example.com',\n      niche: 'Executive Coach',\n      offer: 'High-Ticket Corporate Leadership Retainer',\n      estimatedOfferValue: '$25,000+',\n      leadCaptureMethod: 'Inbound Contact / Direct Application',\n      recentBusinessSignal: 'Actively keynote speaking and expanding corporate cohort',\n      notes: 'Solo boutique practice; inbounds evaluated personally by founder.'\n    }\n  ];\n} else {\n  for (const item of raw) {\n    const data = item.json.body || item.json;\n    if (Array.isArray(data)) {\n      items.push(...data);\n    } else {\n      items.push(data);\n    }\n  }\n}\n\nconst cleaned = items.map((p, idx) => {\n  const fullName = (p.fullName || p['Full Name'] || '').trim();\n  const nameParts = fullName.split(' ');\n  const firstName = (p.firstName || p['First Name'] || nameParts[0] || '').trim();\n  const lastName = (p.lastName || p['Last Name'] || nameParts.slice(1).join(' ') || '').trim();\n  const company = (p.company || p['Company'] || '').trim();\n  const leadId = p.leadId || p['Lead ID'] || ('LEAD-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(Math.random() * 899 + 100));\n\n  return {\n    json: {\n      leadId,\n      firstName,\n      lastName,\n      fullName: fullName || (firstName + ' ' + lastName).trim(),\n      company,\n      jobTitle: (p.jobTitle || p['Job Title'] || '').trim(),\n      website: (p.website || p['Website'] || '').trim(),\n      linkedInUrl: (p.linkedInUrl || p['LinkedIn URL'] || '').trim(),\n      instagramUrl: (p.instagramUrl || p['Instagram URL'] || '').trim(),\n      xUrl: (p.xUrl || p['X URL'] || '').trim(),\n      country: (p.country || p['Country'] || 'United States').trim(),\n      niche: (p.niche || p['Niche'] || 'Executive Coach').trim(),\n      corporateFocus: (p.corporateFocus || p['Corporate Focus'] || 'Enterprise C-Suite').trim(),\n      offer: (p.offer || p['Offer'] || 'Executive Leadership Advisory').trim(),\n      estimatedOfferValue: (p.estimatedOfferValue || p['Estimated Offer Value'] || '$15k-$35k').trim(),\n      leadCaptureMethod: (p.leadCaptureMethod || p['Lead Capture Method'] || 'Direct Contact Form').trim(),\n      recentBusinessSignal: (p.recentBusinessSignal || p['Recent Business Signal'] || 'Active Corporate Engagements').trim(),\n      potentialPain: (p.potentialPain || p['Potential Pain'] || 'Manual inquiry triage & calendar fragmentation').trim(),\n      email: (p.email || p['Email'] || '').toLowerCase().trim(),\n      emailVerificationStatus: (p.emailVerificationStatus || p['Email Verification Status'] || 'verified').trim(),\n      source: (p.source || p['Source'] || 'Inbound Webhook').trim(),\n      status: 'Raw',\n      dateAdded: new Date().toISOString().split('T')[0],\n      notes: (p.notes || p['Notes'] || '').trim()\n    }\n  };\n});\n\nreturn cleaned;"
+        },
+        "id": "node-3-normalize-input",
+        "name": "Normalize Inbound Lead",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          380,
+          340
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "YOUR_GOOGLE_SHEET_ID",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Master_Prospects",
+            "mode": "name"
+          },
+          "options": {}
+        },
+        "id": "node-4-read-existing",
+        "name": "Fetch Existing Leads (Google Sheet)",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          620,
+          340
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "google-sheets-oauth-cred",
+            "name": "Google Sheets Account (shahriar.rusan12@gmail.com)"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// 6-Tier Deduplication Engine against Master Google Sheet\nconst currentLead = $('Normalize Inbound Lead').first().json;\nlet existingRows = [];\n\ntry {\n  existingRows = $input.all().map(i => i.json);\n} catch (e) {\n  existingRows = [];\n}\n\nfunction cleanDomain(url) {\n  if (!url) return '';\n  try {\n    let u = url.toLowerCase().trim();\n    if (!u.startsWith('http://') && !u.startsWith('https://')) u = 'https://' + u;\n    const parsed = new URL(u);\n    return parsed.hostname.replace(/^www\\./, '');\n  } catch (e) {\n    return url.toLowerCase().trim().replace(/^(https?:\\/\\/)?(www\\.)?/, '').split('/')[0];\n  }\n}\n\nfunction cleanLinkedIn(url) {\n  if (!url) return '';\n  return url.toLowerCase().trim()\n    .replace(/^(https?:\\/\\/)?(www\\.)?linkedin\\.com\\/in\\//, '')\n    .replace(/\\/$/, '');\n}\n\nfunction cleanSocialHandle(url) {\n  if (!url) return '';\n  return url.toLowerCase().trim()\n    .replace(/^(https?:\\/\\/)?(www\\.)?(instagram|x|twitter)\\.com\\//, '')\n    .replace(/^@/, '')\n    .replace(/\\/$/, '');\n}\n\nconst curEmail = (currentLead.email || '').toLowerCase().trim();\nconst curDomain = cleanDomain(currentLead.website);\nconst curLinkedIn = cleanLinkedIn(currentLead.linkedInUrl);\nconst curIg = cleanSocialHandle(currentLead.instagramUrl);\nconst curX = cleanSocialHandle(currentLead.xUrl);\nconst curNameComp = (currentLead.fullName + ' ' + currentLead.company).toLowerCase().replace(/[^a-z0-9]/g, '');\n\nlet isDuplicate = false;\nlet duplicateReason = '';\nlet matchedRecord = null;\n\nfor (const row of existingRows) {\n  const rowEmail = (row['Email'] || row.email || '').toLowerCase().trim();\n  const rowDomain = cleanDomain(row['Website'] || row.website);\n  const rowLinkedIn = cleanLinkedIn(row['LinkedIn URL'] || row.linkedInUrl);\n  const rowIg = cleanSocialHandle(row['Instagram URL'] || row.instagramUrl);\n  const rowX = cleanSocialHandle(row['X URL'] || row.xUrl);\n  const rowName = (row['Full Name'] || row.fullName || '').trim();\n  const rowCompany = (row['Company'] || row.company || '').trim();\n  const rowNameComp = (rowName + ' ' + rowCompany).toLowerCase().replace(/[^a-z0-9]/g, '');\n\n  // Tier 1: Exact Email\n  if (curEmail && rowEmail && curEmail === rowEmail) {\n    isDuplicate = true;\n    duplicateReason = `Tier 1 Match: Exact email already exists (${curEmail})`;\n    matchedRecord = row;\n    break;\n  }\n  // Tier 2: Domain Match\n  if (curDomain && rowDomain && curDomain === rowDomain) {\n    isDuplicate = true;\n    duplicateReason = `Tier 2 Match: Company domain already exists (${curDomain})`;\n    matchedRecord = row;\n    break;\n  }\n  // Tier 3: LinkedIn Profile\n  if (curLinkedIn && rowLinkedIn && curLinkedIn === rowLinkedIn) {\n    isDuplicate = true;\n    duplicateReason = `Tier 3 Match: LinkedIn slug already registered (${curLinkedIn})`;\n    matchedRecord = row;\n    break;\n  }\n  // Tier 4: Instagram Handle\n  if (curIg && rowIg && curIg === rowIg) {\n    isDuplicate = true;\n    duplicateReason = `Tier 4 Match: Instagram handle match (@${curIg})`;\n    matchedRecord = row;\n    break;\n  }\n  // Tier 5: X / Twitter Handle\n  if (curX && rowX && curX === rowX) {\n    isDuplicate = true;\n    duplicateReason = `Tier 5 Match: X handle match (@${curX})`;\n    matchedRecord = row;\n    break;\n  }\n  // Tier 6: Full Name + Company\n  if (curNameComp.length > 5 && rowNameComp.length > 5 && curNameComp === rowNameComp) {\n    isDuplicate = true;\n    duplicateReason = `Tier 6 Match: Exact Name & Company combination (${rowName} @ ${rowCompany})`;\n    matchedRecord = row;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    ...currentLead,\n    isDuplicate,\n    duplicateReason,\n    matchedLeadId: matchedRecord ? (matchedRecord['Lead ID'] || matchedRecord.leadId) : null\n  }\n}];"
+        },
+        "id": "node-5-dedup-engine",
+        "name": "6-Tier Deduplication Engine",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          860,
+          340
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.isDuplicate }}",
+                "rightValue": false,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "node-6-if-new",
+        "name": "Is New Prospect?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1100,
+          340
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// 0–100 Deterministic ICP Scoring & Qualification Engine\nconst p = $input.first().json;\n\nlet economicScore = 0;\nlet corporateScore = 0;\nlet inboundScore = 0;\nlet founderLedScore = 0;\nlet painScore = 0;\nlet buyingSignalScore = 0;\n\nconst textBlob = [\n  p.niche, p.offer, p.estimatedOfferValue, p.jobTitle, p.company,\n  p.leadCaptureMethod, p.recentBusinessSignal, p.potentialPain, p.notes\n].filter(Boolean).join(' ').toLowerCase();\n\n// 1. Economic Score (0-25 pts)\nif (/\\$?[2-5][0-9]k|\\$50,000|retainer|advisory|c-suite retainer/i.test(textBlob)) {\n  economicScore = 25;\n} else if (/\\$1[0-9]k|corporate package|executive coaching/i.test(textBlob)) {\n  economicScore = 20;\n} else if (/\\$[5-9]k|mastermind/i.test(textBlob)) {\n  economicScore = 12;\n} else {\n  economicScore = 5;\n}\n\n// 2. Corporate Focus (0-20 pts)\nif (/c-suite|fortune|enterprise|vp|board of directors|executive leadership/i.test(textBlob)) {\n  corporateScore = 20;\n} else if (/corporate|leadership training|director|management/i.test(textBlob)) {\n  corporateScore = 15;\n} else if (/founder|business coach|career/i.test(textBlob)) {\n  corporateScore = 10;\n} else {\n  corporateScore = 2;\n}\n\n// 3. Inbound / Bottleneck Score (0-10 pts)\nif (/substack|newsletter|podcast|keynote|author|book|active/i.test(textBlob) || p.website) {\n  inboundScore = 10;\n} else {\n  inboundScore = 5;\n}\n\n// 4. Founder-Led / Lean (0-10 pts)\nif (/founder|principal|managing director|senior coach|owner/i.test(p.jobTitle || '')) {\n  founderLedScore = 10;\n} else {\n  founderLedScore = 6;\n}\n\n// 5. Operational Pain Score (0-15 pts)\nif (/calendly|manual|intake|calendar|unqualified|inbox|filtering/i.test(textBlob)) {\n  painScore = 15;\n} else if (/contact form|application/i.test(textBlob)) {\n  painScore = 10;\n} else {\n  painScore = 5;\n}\n\n// 6. Buying Signals Score (0-20 pts)\nif (/cohort|launch|expanding|new keynote|tour|hiring|high volume/i.test(textBlob)) {\n  buyingSignalScore = 20;\n} else if (/speaking|published|conference/i.test(textBlob)) {\n  buyingSignalScore = 14;\n} else {\n  buyingSignalScore = 8;\n}\n\nconst icpScore = economicScore + corporateScore + inboundScore + founderLedScore + painScore + buyingSignalScore;\n\nlet tier = 'Rejected';\nlet qualificationReason = '';\nif (icpScore >= 80) {\n  tier = 'Tier 1 (A+)';\n  qualificationReason = `Priority A+ (Score ${icpScore}/100): High-ticket corporate retainer, enterprise buyer positioning, and severe manual intake bottleneck.`;\n} else if (icpScore >= 65) {\n  tier = 'Tier 2 (A)';\n  qualificationReason = `Qualified A (Score ${icpScore}/100): Strong corporate focus and high-ticket service offer matching intake triage solution.`;\n} else if (icpScore >= 50) {\n  tier = 'Tier 3 (B)';\n  qualificationReason = `Moderate B (Score ${icpScore}/100): Mid-market coaching focus; recommend periodic nurture.`;\n} else {\n  tier = 'Disqualified';\n  qualificationReason = `Low ICP fit (Score ${icpScore}/100): Below minimum threshold for enterprise intake triage automation.`;\n}\n\nconst verifiedEvidence = `Company: ${p.company}; Role: ${p.jobTitle}; Offer: ${p.offer} (${p.estimatedOfferValue}); Verified Domain: ${p.website}`;\nconst inference = corporateScore >= 15 \n  ? 'Strong probability of C-Suite or VP decision makers seeking structured advisory.' \n  : 'General corporate training delivery.';\nconst unknowns = 'Exact weekly inbound inquiry volume; Current inbound qualification drop-off rate.';\nconst whyNow = buyingSignalScore >= 14 \n  ? 'Active business acceleration and public visibility causing calendar compression.' \n  : 'Continuous corporate intake management.';\nconst personalizationAngle = `Addressing inbound lead triage drag between ${p.company} client engagements`;\n\nreturn [{\n  json: {\n    ...p,\n    icpScore,\n    economicScore,\n    corporateScore,\n    inboundScore,\n    founderLedScore,\n    painScore,\n    buyingSignalScore,\n    tier,\n    verifiedEvidence,\n    inference,\n    unknowns,\n    qualificationReason,\n    whyNow,\n    personalizationAngle,\n    recommendedChannel: 'email',\n    status: icpScore >= 65 ? 'Ready for Review' : (icpScore >= 50 ? 'Nurture / Hold' : 'Rejected')\n  }\n}];"
+        },
+        "id": "node-7-scoring-engine",
+        "name": "0–100 ICP Scoring Engine",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1340,
+          260
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "c2",
+                "leftValue": "={{ $json.icpScore }}",
+                "rightValue": 65,
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "node-8-if-qualified",
+        "name": "Is Lead Qualified? (>=65)",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1580,
+          260
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Multi-Channel Executive Personalization Engine (Email, LinkedIn, Instagram, X)\nconst p = $input.first().json;\n\nconst firstName = p.firstName || (p.fullName || 'there').split(' ')[0] || 'there';\nconst companyName = p.company || 'your advisory practice';\nconst offer = p.offer || 'executive leadership programs';\nconst corporateFocus = p.corporateFocus || 'enterprise leadership teams';\n\nconst hasEmail = Boolean(p.email && p.email.trim());\nconst hasLinkedIn = Boolean(p.linkedInUrl && p.linkedInUrl.trim());\nconst hasInstagram = Boolean(p.instagramUrl && p.instagramUrl.trim());\nconst hasX = Boolean(p.xUrl && p.xUrl.trim());\n\n// A/B CTA Testing selection\nconst ctaVariant = Math.random() > 0.5 ? 'CTA A' : 'CTA B';\nconst emailCta = ctaVariant === 'CTA A'\n  ? 'Worth sending over a 2-minute breakdown?'\n  : 'Would it be useful if I sent you a 2-minute example?';\n\n// 1. Email Channel (80-120 words, Executive Lead Intake positioning, Human review)\nlet draftEmail = '';\nif (hasEmail) {\n  const observation = p.recentBusinessSignal && p.recentBusinessSignal.length > 5\n    ? `I came across ${companyName} and noticed your work with ${corporateFocus}, specifically around ${p.recentBusinessSignal}.`\n    : `I came across ${companyName} and noticed you work with ${corporateFocus} delivering ${offer}.`;\n\n  draftEmail = `Subject: Quick question about ${companyName}'s inbound inquiries\n\nHi ${firstName},\n\n${observation}\n\nMost senior advisors find that between client sessions, evaluating incoming inquiries, identifying serious corporate opportunities, and drafting response replies takes significant manual attention.\n\nI'm building an executive lead-intake system that turns incoming inquiries into a qualification brief, prioritizes stronger opportunities, and prepares a response draft for review before you open your inbox.\n\nThe goal is simple: less time sorting through inquiries, faster responses to serious prospects, and no autonomous AI messaging.\n\n${emailCta}\n\nBest,\nRusan\nExecutive Lead Intake`;\n} else {\n  draftEmail = '[NOT RECOMMENDED - No verified email available]';\n}\n\n// 2. LinkedIn Channel (Connection note, first message, follow-up)\nlet draftLinkedIn = '';\nif (hasLinkedIn) {\n  draftLinkedIn = [\n    `[CONNECTION NOTE]`,\n    `Hi ${firstName} — saw your work with leadership teams at ${companyName}. Noticed your inquiry pathway handles both corporate inquiries and general inbounds. Would love to connect.`,\n    '',\n    `[FIRST MESSAGE]`,\n    `Hi ${firstName} — thanks for connecting. Appreciate the work you're doing with ${offer} at ${companyName}. Curious: during intensive client delivery weeks, how do you typically triage incoming corporate inquiries?`,\n    '',\n    `[FOLLOW-UP]`,\n    `Hi ${firstName} — following up on our chat. We set up an executive intake & triage layer for leadership practices: every inquiry gets turned into a qualification brief with response drafts prepared for human review before your inbox. Would it be useful if I showed you how it works?`\n  ].join('\\n');\n} else {\n  draftLinkedIn = '[NOT RECOMMENDED - No LinkedIn profile available]';\n}\n\n// 3. Instagram Channel (Natural professional DM, follow-up)\nlet draftInstagram = '';\nif (hasInstagram) {\n  draftInstagram = [\n    `[FIRST DM]`,\n    `Hey ${firstName}, came across your leadership updates for ${companyName}. Quick question regarding your advisory practice: do you personally filter through your incoming inquiries, or do you have a triage workflow in place?`,\n    '',\n    `[FOLLOW-UP]`,\n    `Hey ${firstName}, reason I asked: we built an executive lead-intake system that qualifies corporate inquiries and pre-drafts replies for your review so your calendar stays protected. Open to seeing a quick 2-minute example?`\n  ].join('\\n');\n} else {\n  draftInstagram = '[NOT RECOMMENDED - No Instagram profile available]';\n}\n\n// 4. X Channel (Public opener, DM, follow-up)\nlet draftX = '';\nif (hasX) {\n  draftX = [\n    `[PUBLIC REPLY / OPENER]`,\n    `Solid perspective on executive advisory delivery. The operational challenge is always defending focus while inbounds keep landing.`,\n    '',\n    `[DIRECT MESSAGE]`,\n    `Hi ${firstName}, saw your posts on corporate leadership consulting. We built an intake triage layer that prioritizes qualified corporate inquiries and prepares response drafts for review. Open to seeing a quick example?`,\n    '',\n    `[FOLLOW-UP]`,\n    `Hi ${firstName}, just checking if you had a chance to see my note above regarding intake triage for ${companyName}. Happy to share a quick 2-minute walkthrough.`\n  ].join('\\n');\n} else {\n  draftX = '[NOT RECOMMENDED - No X profile available]';\n}\n\n// Channel recommendation\nlet recommendedChannel = 'EMAIL';\nif (hasEmail && hasLinkedIn) {\n  recommendedChannel = 'MULTI-CHANNEL';\n} else if (hasLinkedIn && !hasEmail) {\n  recommendedChannel = 'LINKEDIN';\n} else if (hasEmail) {\n  recommendedChannel = 'EMAIL';\n} else if (hasInstagram) {\n  recommendedChannel = 'INSTAGRAM';\n} else if (hasX) {\n  recommendedChannel = 'X';\n}\n\nreturn [{\n  json: {\n    ...p,\n    recommendedChannel,\n    ctaVariant,\n    draftEmail,\n    draftLinkedInMessage: draftLinkedIn,\n    draftInstagramMessage: draftInstagram,\n    draftXMessage: draftX,\n    status: 'Ready for Review'\n  }\n}];"
+        },
+        "id": "node-9-personalization",
+        "name": "Bespoke Messaging Engine",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1840,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Map exact 50 Column Headers for Google Sheet\nconst p = $input.first().json;\n\nreturn [{\n  json: {\n    'Lead ID': p.leadId || '',\n    'First Name': p.firstName || '',\n    'Last Name': p.lastName || '',\n    'Full Name': p.fullName || '',\n    'Company': p.company || '',\n    'Job Title': p.jobTitle || '',\n    'Website': p.website || '',\n    'LinkedIn URL': p.linkedInUrl || '',\n    'Instagram URL': p.instagramUrl || '',\n    'X URL': p.xUrl || '',\n    'Country': p.country || 'United States',\n    'Niche': p.niche || '',\n    'Corporate Focus': p.corporateFocus || '',\n    'Offer': p.offer || '',\n    'Estimated Offer Value': p.estimatedOfferValue || '',\n    'Lead Capture Method': p.leadCaptureMethod || '',\n    'Recent Business Signal': p.recentBusinessSignal || '',\n    'Potential Pain': p.potentialPain || '',\n    'Email': p.email || '',\n    'Email Verification Status': p.emailVerificationStatus || 'verified',\n    'Source': p.source || 'n8n Master Workflow',\n    'ICP Score': Number(p.icpScore || 0),\n    'Economic Score': Number(p.economicScore || 0),\n    'Corporate Score': Number(p.corporateScore || 0),\n    'Inbound Score': Number(p.inboundScore || 0),\n    'Founder-Led Score': Number(p.founderLedScore || 0),\n    'Pain Score': Number(p.painScore || 0),\n    'Buying Signal Score': Number(p.buyingSignalScore || 0),\n    'Verified Evidence': p.verifiedEvidence || '',\n    'Inference': p.inference || '',\n    'Unknowns': p.unknowns || '',\n    'Qualification Reason': p.qualificationReason || '',\n    'Why Now': p.whyNow || '',\n    'Personalization Angle': p.personalizationAngle || '',\n    'Recommended Channel': p.recommendedChannel || 'email',\n    'Draft Email': p.draftEmail || '',\n    'Draft LinkedIn Message': p.draftLinkedInMessage || '',\n    'Draft Instagram Message': p.draftInstagramMessage || '',\n    'Draft X Message': p.draftXMessage || '',\n    'Status': p.status || 'Ready for Review',\n    'Date Added': p.dateAdded || new Date().toISOString().split('T')[0],\n    'Date Contacted': p.dateContacted || '',\n    'Follow-up 1': '',\n    'Follow-up 2': '',\n    'Response': '',\n    'Positive Response': '',\n    'Call Booked': '',\n    'Proposal': '',\n    'Closed': '',\n    'Notes': p.notes || `Processed via n8n Master Workflow on ${new Date().toISOString().split('T')[0]}`\n  }\n}];"
+        },
+        "id": "node-10-format-sheet-cols",
+        "name": "Format 50 Columns",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2100,
+          260
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "YOUR_GOOGLE_SHEET_ID",
+            "mode": "id",
+            "cachedResultName": "Master_Prospects"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Master_Prospects",
+            "mode": "name",
+            "cachedResultName": "Master_Prospects"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": {},
+            "schema": [
+              {
+                "id": "Lead ID",
+                "displayName": "Lead ID",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "First Name",
+                "displayName": "First Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Last Name",
+                "displayName": "Last Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Full Name",
+                "displayName": "Full Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Company",
+                "displayName": "Company",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Job Title",
+                "displayName": "Job Title",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Website",
+                "displayName": "Website",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "LinkedIn URL",
+                "displayName": "LinkedIn URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Instagram URL",
+                "displayName": "Instagram URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "X URL",
+                "displayName": "X URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Country",
+                "displayName": "Country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Niche",
+                "displayName": "Niche",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Corporate Focus",
+                "displayName": "Corporate Focus",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Offer",
+                "displayName": "Offer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Estimated Offer Value",
+                "displayName": "Estimated Offer Value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Lead Capture Method",
+                "displayName": "Lead Capture Method",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Recent Business Signal",
+                "displayName": "Recent Business Signal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Potential Pain",
+                "displayName": "Potential Pain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Email",
+                "displayName": "Email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Email Verification Status",
+                "displayName": "Email Verification Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Source",
+                "displayName": "Source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "ICP Score",
+                "displayName": "ICP Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Economic Score",
+                "displayName": "Economic Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Corporate Score",
+                "displayName": "Corporate Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Inbound Score",
+                "displayName": "Inbound Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Founder-Led Score",
+                "displayName": "Founder-Led Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Pain Score",
+                "displayName": "Pain Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Buying Signal Score",
+                "displayName": "Buying Signal Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Verified Evidence",
+                "displayName": "Verified Evidence",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Inference",
+                "displayName": "Inference",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Unknowns",
+                "displayName": "Unknowns",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Qualification Reason",
+                "displayName": "Qualification Reason",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Why Now",
+                "displayName": "Why Now",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Personalization Angle",
+                "displayName": "Personalization Angle",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Recommended Channel",
+                "displayName": "Recommended Channel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft Email",
+                "displayName": "Draft Email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft LinkedIn Message",
+                "displayName": "Draft LinkedIn Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft Instagram Message",
+                "displayName": "Draft Instagram Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft X Message",
+                "displayName": "Draft X Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Status",
+                "displayName": "Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Date Added",
+                "displayName": "Date Added",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Date Contacted",
+                "displayName": "Date Contacted",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Follow-up 1",
+                "displayName": "Follow-up 1",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Follow-up 2",
+                "displayName": "Follow-up 2",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Response",
+                "displayName": "Response",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Positive Response",
+                "displayName": "Positive Response",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Call Booked",
+                "displayName": "Call Booked",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Proposal",
+                "displayName": "Proposal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Closed",
+                "displayName": "Closed",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Notes",
+                "displayName": "Notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-11-google-sheets-append",
+        "name": "Save to Master Google Sheet",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          2340,
+          260
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "google-sheets-oauth-cred",
+            "name": "Google Sheets Account (shahriar.rusan12@gmail.com)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Dispatches Telegram Review Card (with 1-click Approval Link and Fallback)\nconst item = $input.first().json;\nconst leadId = item['Lead ID'];\nconst name = item['Full Name'];\nconst company = item['Company'];\nconst score = item['ICP Score'];\nconst draft = item['Draft Email'] || '';\nconst channel = item['Recommended Channel'] || 'EMAIL';\n\nconst approveUrl = `http://localhost:5678/webhook/lead-approval?leadId=${encodeURIComponent(leadId)}&action=approve`;\nconst rejectUrl = `http://localhost:5678/webhook/lead-approval?leadId=${encodeURIComponent(leadId)}&action=reject`;\nconst sheetUrl = 'https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit';\n\nconst summaryCard = \n`🌟 ${score >= 80 ? 'A+ PROSPECT' : 'A PROSPECT'} FOR REVIEW\n\n👤 Name: ${name}\n🏢 Company: ${company}\n🎯 Title: ${item['Job Title']}\n📊 ICP Score: ${score}/100\n🔍 Qualification: ${item['Qualification Reason']}\n⏱ Why Now: ${item['Why Now']}\n📬 Channel: ${channel.toUpperCase()}\n\n📝 Draft Message:\n${draft}\n\n👉 APPROVE OUTREACH (Creates Gmail Draft):\n${approveUrl}\n\n❌ DISQUALIFY / REJECT:\n${rejectUrl}\n\n📊 View Master Sheet:\n${sheetUrl}`;\n\nconsole.log('\\n' + '='.repeat(60));\nconsole.log('📢 TELEGRAM HUMAN APPROVAL CARD:');\nconsole.log('='.repeat(60));\nconsole.log(summaryCard);\nconsole.log('='.repeat(60) + '\\n');\n\nreturn [{\n  json: {\n    ...item,\n    telegramNotificationCard: summaryCard,\n    approveUrl,\n    rejectUrl,\n    sheetUrl\n  }\n}];"
+        },
+        "id": "node-12-telegram-review",
+        "name": "Telegram Review Card",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2580,
+          260
+        ]
+      }
+    ],
+    "connections": {
+      "Lead Ingest Webhook": {
+        "main": [
+          [
+            {
+              "node": "Normalize Inbound Lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Test Trigger": {
+        "main": [
+          [
+            {
+              "node": "Normalize Inbound Lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Inbound Lead": {
+        "main": [
+          [
+            {
+              "node": "Fetch Existing Leads (Google Sheet)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Existing Leads (Google Sheet)": {
+        "main": [
+          [
+            {
+              "node": "6-Tier Deduplication Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "6-Tier Deduplication Engine": {
+        "main": [
+          [
+            {
+              "node": "Is New Prospect?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is New Prospect?": {
+        "main": [
+          [
+            {
+              "node": "0–100 ICP Scoring Engine",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "0–100 ICP Scoring Engine": {
+        "main": [
+          [
+            {
+              "node": "Is Lead Qualified? (>=65)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Lead Qualified? (>=65)": {
+        "main": [
+          [
+            {
+              "node": "Bespoke Messaging Engine",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Format 50 Columns",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Bespoke Messaging Engine": {
+        "main": [
+          [
+            {
+              "node": "Format 50 Columns",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format 50 Columns": {
+        "main": [
+          [
+            {
+              "node": "Save to Master Google Sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save to Master Google Sheet": {
+        "main": [
+          [
+            {
+              "node": "Telegram Review Card",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
+]

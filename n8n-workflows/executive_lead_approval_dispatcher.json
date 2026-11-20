@@ -1,0 +1,1271 @@
+[
+  {
+    "id": "ExecLeadApprove2",
+    "name": "Executive Lead Approval & Gmail Outreach Dispatcher",
+    "active": true,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "GET",
+          "path": "lead-approval",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "node-appr-1-webhook",
+        "name": "Approval Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          120,
+          300
+        ],
+        "webhookId": "exec-lead-approval-webhook"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Parse approval decision and leadId from query or body\nconst query = $input.first().json.query || {};\nconst body = $input.first().json.body || {};\n\nconst leadId = (query.leadId || body.leadId || '').trim();\nconst action = (query.action || body.action || 'approve').toLowerCase().trim();\n\nif (!leadId) {\n  throw new Error('Missing required leadId parameter in approval webhook');\n}\n\nreturn [{\n  json: {\n    leadId,\n    action,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        },
+        "id": "node-appr-2-parse-action",
+        "name": "Parse Approval Action",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          360,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "read",
+          "documentId": {
+            "__rl": true,
+            "value": "YOUR_GOOGLE_SHEET_ID",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Master_Prospects",
+            "mode": "name"
+          },
+          "options": {}
+        },
+        "id": "node-appr-3-read-sheet",
+        "name": "Read Master Sheet",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          600,
+          300
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "google-sheets-oauth-cred",
+            "name": "Google Sheets Account (shahriar.rusan12@gmail.com)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Match specific row by Lead ID\nconst target = $('Parse Approval Action').first().json;\nconst rows = $input.all().map(i => i.json);\n\nconst matchedRow = rows.find(r => {\n  const rowId = String(r['Lead ID'] || r.leadId || '').trim();\n  return rowId && rowId.toLowerCase() === target.leadId.toLowerCase();\n});\n\nif (!matchedRow) {\n  throw new Error('Lead ID not found in Master Google Sheet: ' + target.leadId);\n}\n\nconst draftText = matchedRow['Draft Email'] || '';\nconst lines = draftText.split('\\n');\nlet subject = lines.find(l => l.startsWith('Subject:'));\nif (subject) {\n  subject = subject.replace(/^Subject:\\s*/, '').trim();\n} else {\n  subject = lines[0] || 'Executive Leadership Advisory Inquiry';\n}\n\nconst bodyText = draftText.replace(/^Subject:.*\\n+/, '').trim();\n\nreturn [{\n  json: {\n    ...matchedRow,\n    'Lead ID': matchedRow['Lead ID'] || target.leadId,\n    leadId: target.leadId,\n    action: target.action,\n    emailSubject: subject,\n    emailBody: bodyText,\n    recipientEmail: matchedRow['Email'] || 'shahriar.rusan12@gmail.com'\n  }\n}];"
+        },
+        "id": "node-appr-4-match-row",
+        "name": "Find Prospect Record",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          840,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "c-appr-1",
+                "leftValue": "={{ $json.action }}",
+                "rightValue": "approve",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "node-appr-5-if-approve",
+        "name": "Is Approved?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1080,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "YOUR_GOOGLE_SHEET_ID",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Master_Prospects",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Lead ID": "={{ $json[\"Lead ID\"] || $json.leadId }}",
+              "Status": "Contacted",
+              "Date Contacted": "={{ $now.format(\"yyyy-MM-dd\") }}",
+              "Notes": "={{ ($json.Notes || \"\") }} | Approved via Human Review. Outreach dispatched."
+            },
+            "matchingColumns": [
+              "Lead ID"
+            ],
+            "schema": [
+              {
+                "id": "Lead ID",
+                "displayName": "Lead ID",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "First Name",
+                "displayName": "First Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Last Name",
+                "displayName": "Last Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Full Name",
+                "displayName": "Full Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Company",
+                "displayName": "Company",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Job Title",
+                "displayName": "Job Title",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Website",
+                "displayName": "Website",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "LinkedIn URL",
+                "displayName": "LinkedIn URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Instagram URL",
+                "displayName": "Instagram URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "X URL",
+                "displayName": "X URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Country",
+                "displayName": "Country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Niche",
+                "displayName": "Niche",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Corporate Focus",
+                "displayName": "Corporate Focus",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Offer",
+                "displayName": "Offer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Estimated Offer Value",
+                "displayName": "Estimated Offer Value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Lead Capture Method",
+                "displayName": "Lead Capture Method",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Recent Business Signal",
+                "displayName": "Recent Business Signal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Potential Pain",
+                "displayName": "Potential Pain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Email",
+                "displayName": "Email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Email Verification Status",
+                "displayName": "Email Verification Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Source",
+                "displayName": "Source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "ICP Score",
+                "displayName": "ICP Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Economic Score",
+                "displayName": "Economic Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Corporate Score",
+                "displayName": "Corporate Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Inbound Score",
+                "displayName": "Inbound Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Founder-Led Score",
+                "displayName": "Founder-Led Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Pain Score",
+                "displayName": "Pain Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Buying Signal Score",
+                "displayName": "Buying Signal Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Verified Evidence",
+                "displayName": "Verified Evidence",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Inference",
+                "displayName": "Inference",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Unknowns",
+                "displayName": "Unknowns",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Qualification Reason",
+                "displayName": "Qualification Reason",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Why Now",
+                "displayName": "Why Now",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Personalization Angle",
+                "displayName": "Personalization Angle",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Recommended Channel",
+                "displayName": "Recommended Channel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft Email",
+                "displayName": "Draft Email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft LinkedIn Message",
+                "displayName": "Draft LinkedIn Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft Instagram Message",
+                "displayName": "Draft Instagram Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft X Message",
+                "displayName": "Draft X Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Status",
+                "displayName": "Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Date Added",
+                "displayName": "Date Added",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Date Contacted",
+                "displayName": "Date Contacted",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Follow-up 1",
+                "displayName": "Follow-up 1",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Follow-up 2",
+                "displayName": "Follow-up 2",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Response",
+                "displayName": "Response",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Positive Response",
+                "displayName": "Positive Response",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Call Booked",
+                "displayName": "Call Booked",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Proposal",
+                "displayName": "Proposal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Closed",
+                "displayName": "Closed",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Notes",
+                "displayName": "Notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-appr-7-update-sheet-approved",
+        "name": "Mark Contacted (Google Sheet)",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          1340,
+          200
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "google-sheets-oauth-cred",
+            "name": "Google Sheets Account (shahriar.rusan12@gmail.com)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $('Find Prospect Record').first().json.recipientEmail || $('Find Prospect Record').first().json.Email }}",
+          "subject": "={{ $('Find Prospect Record').first().json.emailSubject }}",
+          "message": "={{ $('Find Prospect Record').first().json.emailBody }}",
+          "options": {}
+        },
+        "id": "node-appr-6-gmail-draft",
+        "name": "Create Gmail Draft",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          1580,
+          200
+        ],
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "gmail-oauth-cred",
+            "name": "Gmail Account (shahriar.rusan12@gmail.com)"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <title>Prospect Approved</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }\n    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 40px; max-width: 520px; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }\n    .badge { display: inline-block; background: #10b981; color: #022c22; font-weight: 700; padding: 6px 14px; border-radius: 9999px; margin-bottom: 20px; font-size: 14px; }\n    h1 { margin: 0 0 10px; font-size: 24px; color: #ffffff; }\n    p { color: #94a3b8; font-size: 15px; line-height: 1.5; margin: 10px 0 25px; }\n    .btn { display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; transition: background 0.2s; }\n    .btn:hover { background: #2563eb; }\n  </style>\n</head>\n<body>\n  <div class=\"card\">\n    <div class=\"badge\">APPROVED & DISPATCHED</div>\n    <h1>Lead Approved Successfully</h1>\n    <p>The personalized outreach for <strong>{{ $('Find Prospect Record').first().json['Full Name'] }}</strong> ({{ $('Find Prospect Record').first().json['Company'] }}) was approved. A Gmail draft has been queued and the Google Master Sheet status updated to <em>Contacted</em>.</p>\n    <a class=\"btn\" href=\"https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit\" target=\"_blank\">Open Master Google Sheet</a>\n  </div>\n</body>\n</html>",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "text/html; charset=utf-8"
+                }
+              ]
+            }
+          }
+        },
+        "id": "node-appr-8-respond-approved",
+        "name": "Respond Approved Screen",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1820,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "YOUR_GOOGLE_SHEET_ID",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Master_Prospects",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Lead ID": "={{ $json[\"Lead ID\"] || $json.leadId }}",
+              "Status": "Rejected",
+              "Notes": "={{ $json.Notes || \"\" }} | Rejected via Human Review on {{ $now.format(\"yyyy-MM-dd\") }}"
+            },
+            "matchingColumns": [
+              "Lead ID"
+            ],
+            "schema": [
+              {
+                "id": "Lead ID",
+                "displayName": "Lead ID",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "First Name",
+                "displayName": "First Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Last Name",
+                "displayName": "Last Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Full Name",
+                "displayName": "Full Name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Company",
+                "displayName": "Company",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Job Title",
+                "displayName": "Job Title",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Website",
+                "displayName": "Website",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "LinkedIn URL",
+                "displayName": "LinkedIn URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Instagram URL",
+                "displayName": "Instagram URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "X URL",
+                "displayName": "X URL",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Country",
+                "displayName": "Country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Niche",
+                "displayName": "Niche",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Corporate Focus",
+                "displayName": "Corporate Focus",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Offer",
+                "displayName": "Offer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Estimated Offer Value",
+                "displayName": "Estimated Offer Value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Lead Capture Method",
+                "displayName": "Lead Capture Method",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Recent Business Signal",
+                "displayName": "Recent Business Signal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Potential Pain",
+                "displayName": "Potential Pain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Email",
+                "displayName": "Email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Email Verification Status",
+                "displayName": "Email Verification Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Source",
+                "displayName": "Source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "ICP Score",
+                "displayName": "ICP Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Economic Score",
+                "displayName": "Economic Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Corporate Score",
+                "displayName": "Corporate Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Inbound Score",
+                "displayName": "Inbound Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Founder-Led Score",
+                "displayName": "Founder-Led Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Pain Score",
+                "displayName": "Pain Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Buying Signal Score",
+                "displayName": "Buying Signal Score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Verified Evidence",
+                "displayName": "Verified Evidence",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Inference",
+                "displayName": "Inference",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Unknowns",
+                "displayName": "Unknowns",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Qualification Reason",
+                "displayName": "Qualification Reason",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Why Now",
+                "displayName": "Why Now",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Personalization Angle",
+                "displayName": "Personalization Angle",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Recommended Channel",
+                "displayName": "Recommended Channel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft Email",
+                "displayName": "Draft Email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft LinkedIn Message",
+                "displayName": "Draft LinkedIn Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft Instagram Message",
+                "displayName": "Draft Instagram Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Draft X Message",
+                "displayName": "Draft X Message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Status",
+                "displayName": "Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Date Added",
+                "displayName": "Date Added",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Date Contacted",
+                "displayName": "Date Contacted",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Follow-up 1",
+                "displayName": "Follow-up 1",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Follow-up 2",
+                "displayName": "Follow-up 2",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Response",
+                "displayName": "Response",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Positive Response",
+                "displayName": "Positive Response",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Call Booked",
+                "displayName": "Call Booked",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Proposal",
+                "displayName": "Proposal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Closed",
+                "displayName": "Closed",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              },
+              {
+                "id": "Notes",
+                "displayName": "Notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-appr-9-update-sheet-rejected",
+        "name": "Mark Rejected (Google Sheet)",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          1340,
+          420
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "google-sheets-oauth-cred",
+            "name": "Google Sheets Account (shahriar.rusan12@gmail.com)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <title>Prospect Disqualified</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }\n    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 40px; max-width: 520px; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }\n    .badge { display: inline-block; background: #ef4444; color: #450a0a; font-weight: 700; padding: 6px 14px; border-radius: 9999px; margin-bottom: 20px; font-size: 14px; }\n    h1 { margin: 0 0 10px; font-size: 24px; color: #ffffff; }\n    p { color: #94a3b8; font-size: 15px; line-height: 1.5; margin: 10px 0 25px; }\n    .btn { display: inline-block; background: #475569; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; }\n  </style>\n</head>\n<body>\n  <div class=\"card\">\n    <div class=\"badge\">LEAD REJECTED</div>\n    <h1>Prospect Disqualified</h1>\n    <p>Lead <strong>{{ $('Find Prospect Record').first().json['Full Name'] }}</strong> has been marked as <em>Rejected</em> in Google Sheets. No outreach will be sent.</p>\n    <a class=\"btn\" href=\"https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit\" target=\"_blank\">Open Master Google Sheet</a>\n  </div>\n</body>\n</html>",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "text/html; charset=utf-8"
+                }
+              ]
+            }
+          }
+        },
+        "id": "node-appr-10-respond-rejected",
+        "name": "Respond Rejected Screen",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1580,
+          420
+        ]
+      }
+    ],
+    "connections": {
+      "Approval Webhook Trigger": {
+        "main": [
+          [
+            {
+              "node": "Parse Approval Action",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Approval Action": {
+        "main": [
+          [
+            {
+              "node": "Read Master Sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Master Sheet": {
+        "main": [
+          [
+            {
+              "node": "Find Prospect Record",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Find Prospect Record": {
+        "main": [
+          [
+            {
+              "node": "Is Approved?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Approved?": {
+        "main": [
+          [
+            {
+              "node": "Mark Contacted (Google Sheet)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark Rejected (Google Sheet)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Contacted (Google Sheet)": {
+        "main": [
+          [
+            {
+              "node": "Create Gmail Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Gmail Draft": {
+        "main": [
+          [
+            {
+              "node": "Respond Approved Screen",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Rejected (Google Sheet)": {
+        "main": [
+          [
+            {
+              "node": "Respond Rejected Screen",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
+]

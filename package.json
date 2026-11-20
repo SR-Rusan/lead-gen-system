@@ -1,0 +1,37 @@
+{
+  "name": "executive-lead-intake-system",
+  "version": "1.0.0",
+  "description": "Production-ready B2B Lead Generation, Qualification, and Human-in-the-Loop Triage Engine for Executive Coaches and Advisory Firms",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "server": "ts-node src/webhook-server.ts",
+    "test": "ts-node tests/e2e-lead-gen.test.ts",
+    "discover:google": "ts-node src/discovery/google-serper.ts",
+    "discover:apify": "ts-node src/discovery/apify-discovery.ts",
+    "scrape:n8n": "ts-node scripts/scrape_to_n8n.ts",
+    "qualify": "ts-node -e \"import { runQualificationPipeline } from './src/index'; runQualificationPipeline();\"",
+    "approval:telegram": "ts-node src/outreach/telegram-approval.ts",
+    "analytics": "ts-node -e \"import { printAnalyticsDashboard } from './src/analytics/analytics-engine'; printAnalyticsDashboard();\""
+  },
+  "keywords": [
+    "b2b",
+    "lead-generation",
+    "make-com",
+    "openrouter",
+    "apify",
+    "qualification",
+    "executive-coaching"
+  ],
+  "author": "Executive Lead Intake System",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
