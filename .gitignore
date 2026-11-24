@@ -15,3 +15,6 @@ venv/
 *.mp3
 credentials*.json
 token*.json
+
+# private lead data
+data/
