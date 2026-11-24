@@ -1,6 +1,6 @@
 # Google Sheets Operational Dashboard Setup & Formula Reference
 
-This document outlines the spreadsheet architecture, formulas, and filter views to turn your Google Sheet (`GOOGLE_SHEET_ID: 1LvSouAG9b0dF5ndwqp7HckefIaBYZV4ePlm0L7_lIqw`) into a real-time operational dashboard.
+This document outlines the spreadsheet architecture, formulas, and filter views to turn your Google Sheet (`GOOGLE_SHEET_ID: YOUR_GOOGLE_SHEET_ID`) into a real-time operational dashboard.
 
 ---
 

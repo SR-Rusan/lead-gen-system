@@ -14,7 +14,7 @@ export class ApifyDiscovery {
   public async discoverGoogle(queries: string[] = ['"executive coaching" "corporate clients"']): Promise<RawLeadInput[]> {
     if (!this.token) {
       console.log('[ApifyDiscovery] No APIFY_TOKEN provided. Returning curated discovery data.');
-      return this.getMockApifyLeads('google');
+      throw new Error('Apify google search unavailable (no fake fallback leads)');
     }
 
     try {
@@ -38,7 +38,7 @@ export class ApifyDiscovery {
       }));
     } catch (err) {
       console.error('[ApifyDiscovery] Error running Google Search actor:', err);
-      return this.getMockApifyLeads('google');
+      throw new Error('Apify google search unavailable (no fake fallback leads)');
     }
   }
 
@@ -48,7 +48,7 @@ export class ApifyDiscovery {
   public async discoverLinkedIn(keywords: string[] = ['"executive coach" "corporate leadership" site:linkedin.com/in/']): Promise<RawLeadInput[]> {
     if (!this.token) {
       console.log('[ApifyDiscovery] No APIFY_TOKEN provided. Returning curated LinkedIn leads.');
-      return this.getMockApifyLeads('linkedin');
+      throw new Error('Apify linkedin search unavailable (no fake fallback leads)');
     }
 
     try {
@@ -83,7 +83,7 @@ export class ApifyDiscovery {
       });
     } catch (err) {
       console.error('[ApifyDiscovery] Error running LinkedIn actor:', err);
-      return this.getMockApifyLeads('linkedin');
+      throw new Error('Apify linkedin search unavailable (no fake fallback leads)');
     }
   }
 
@@ -92,7 +92,7 @@ export class ApifyDiscovery {
    */
   public async discoverInstagram(handlesOrTags: string[] = ['executivecoach', 'corporatetraining']): Promise<RawLeadInput[]> {
     if (!this.token) {
-      return this.getMockApifyLeads('instagram');
+      throw new Error('Apify instagram search unavailable (no fake fallback leads)');
     }
 
     try {
@@ -115,7 +115,7 @@ export class ApifyDiscovery {
       }));
     } catch (err) {
       console.error('[ApifyDiscovery] Error running Instagram actor:', err);
-      return this.getMockApifyLeads('instagram');
+      throw new Error('Apify instagram search unavailable (no fake fallback leads)');
     }
   }
 

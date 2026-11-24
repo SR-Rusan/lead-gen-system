@@ -3,17 +3,65 @@ import * as path from 'path';
 import { ProspectMasterRecord, PipelineStatus } from '../types';
 import { MASTER_SHEET_HEADERS, recordToRow, rowToRecord } from './schema';
 import { CONFIG } from '../config';
+import { databaseUrl, fetchAllProspects, upsertProspect } from './pg';
 
 const DATA_DIR = path.resolve(__dirname, '../../data');
 const LOCAL_CSV_PATH = path.join(DATA_DIR, 'master_prospects.csv');
 const LOCAL_JSON_PATH = path.join(DATA_DIR, 'master_prospects.json');
 
+/**
+ * Lead store. Two modes:
+ * - Cloud: when DATABASE_URL (or POSTGRES_URL) is set, records live in Postgres. Call `await ready()` before
+ *   reading and `await flush()` before finishing, so reads are fresh and writes are saved.
+ * - Local: otherwise records live in data/master_prospects.json (+ .csv); ready() and flush() do nothing.
+ */
 export class DatabaseClient {
   private cache: Map<string, ProspectMasterRecord> = new Map();
+  public readonly cloud: boolean;
+  private writeChain: Promise<void> = Promise.resolve();
+  private writeError: unknown = null;
 
   constructor() {
-    this.ensureStorage();
-    this.loadFromDisk();
+    this.cloud = Boolean(databaseUrl());
+    // On Vercel the disk is read-only, so without a database there is simply no data.
+    if (!this.cloud && !process.env.VERCEL) {
+      this.ensureStorage();
+      this.loadFromDisk();
+    }
+  }
+
+  /** Reloads every record from the cloud database (no-op on local files). */
+  public async ready(): Promise<void> {
+    if (!this.cloud) return;
+    const list = await fetchAllProspects();
+    this.cache = new Map(list.map((r) => [r.leadId, r]));
+  }
+
+  /** Waits until every queued cloud write is saved; throws if one failed. */
+  public async flush(): Promise<void> {
+    await this.writeChain;
+    if (this.writeError) {
+      const err = this.writeError;
+      this.writeError = null;
+      throw err;
+    }
+  }
+
+  private persist(records: ProspectMasterRecord[]): void {
+    if (!this.cloud) {
+      this.saveToDisk();
+      return;
+    }
+    // Snapshot now: callers keep mutating the same objects after upsert().
+    const snapshots = records.map((r) => JSON.parse(JSON.stringify(r)) as ProspectMasterRecord);
+    this.writeChain = this.writeChain.then(async () => {
+      try {
+        for (const snap of snapshots) await upsertProspect(snap);
+      } catch (err) {
+        console.error('[DatabaseClient] Cloud write failed:', err);
+        this.writeError = err;
+      }
+    });
   }
 
   private ensureStorage(): void {
@@ -88,14 +136,14 @@ export class DatabaseClient {
 
   public upsert(record: ProspectMasterRecord): void {
     this.cache.set(record.leadId, record);
-    this.saveToDisk();
+    this.persist([record]);
   }
 
   public upsertBatch(records: ProspectMasterRecord[]): void {
     for (const r of records) {
       this.cache.set(r.leadId, r);
     }
-    this.saveToDisk();
+    this.persist(records);
   }
 
   public updateStatus(leadId: string, status: PipelineStatus, notes?: string): ProspectMasterRecord | null {
@@ -106,7 +154,7 @@ export class DatabaseClient {
       existing.notes = existing.notes ? `${existing.notes} | ${notes}` : notes;
     }
     this.cache.set(leadId, existing);
-    this.saveToDisk();
+    this.persist([existing]);
     return existing;
   }
 

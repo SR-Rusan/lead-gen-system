@@ -179,7 +179,7 @@ export interface ProspectMasterRecord {
   recentBusinessSignal: string;
   potentialPain: string;
   email: string;
-  emailVerificationStatus: 'verified' | 'unverified' | 'catch-all' | 'unknown';
+  emailVerificationStatus: 'verified' | 'unverified' | 'catch-all' | 'unknown' | 'invalid';
   source: LeadSource;
   icpScore: number;
   economicScore: number;
@@ -210,6 +210,15 @@ export interface ProspectMasterRecord {
   proposal: 'Yes' | 'No' | '';
   closed: 'Won' | 'Lost' | '';
   notes: string;
+  /** Filled by the mailbox sync (rusan@ Sent folder): how many emails went to this lead, and the last one. */
+  emailsSent?: number;
+  lastSentAt?: string;
+  lastMessageId?: string;
+  lastSubject?: string;
+  /** Message-IDs of inbox mail already matched to this lead, so a reply is only counted once. */
+  seenMessageIds?: string[];
+  /** Why the email needs a human look before sending (failed automatic checks). Empty = passed. */
+  needsLook?: string;
 }
 
 export interface RawLeadInput {

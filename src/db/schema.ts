@@ -59,7 +59,7 @@ export function recordToRow(record: ProspectMasterRecord): (string | number)[] {
   return MASTER_SHEET_COLUMNS.map((col) => {
     const val = record[col.key];
     if (val === undefined || val === null) return '';
-    return val;
+    return Array.isArray(val) ? val.join(', ') : val;
   });
 }
 

@@ -4,7 +4,7 @@ import { PersonalizationEngine } from '../src/outreach/personalization';
 import { ProspectMasterRecord } from '../src/types';
 
 const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID';
-const CREDS_PATH = '/Users/rusan/.config/gdrive/.gdrive-server-credentials.json';
+const CREDS_PATH = '~/.config/gdrive/.gdrive-server-credentials.json';
 
 async function getAccessToken(): Promise<string> {
   const creds = JSON.parse(fs.readFileSync(CREDS_PATH, 'utf8'));

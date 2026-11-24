@@ -1,6 +1,8 @@
 import { CONFIG } from '../config';
 import { ProspectMasterRecord } from '../types';
 import { dbClient } from '../db/sheets-client';
+import { createGmailDraft, gmailApiConfigured, splitDraft } from './gmail-api';
+import { createMailboxDraft, mailboxConfigured, mailboxUser } from './imap-draft';
 
 export class GmailDispatcher {
   /**
@@ -8,7 +10,7 @@ export class GmailDispatcher {
    * If channel is email, prepares or sends via Gmail.
    * If channel is LinkedIn/Instagram/X, logs as a prioritized manual task.
    */
-  public async dispatchApprovedOutreach(leadId: string): Promise<{ success: boolean; channel: string; mode: string }> {
+  public async dispatchApprovedOutreach(leadId: string): Promise<{ success: boolean; channel: string; mode: string; message: string }> {
     const lead = dbClient.getById(leadId);
     if (!lead) {
       throw new Error(`Lead ${leadId} not found`);
@@ -18,7 +20,7 @@ export class GmailDispatcher {
       throw new Error(`Lead ${leadId} cannot be dispatched because status is '${lead.status}', not 'Approved'`);
     }
 
-    const channel = lead.recommendedChannel || 'email';
+    const channel = lead.email ? 'email' : lead.recommendedChannel || 'email';
 
     if (channel === 'email') {
       return this.handleEmailDispatch(lead);
@@ -27,37 +29,45 @@ export class GmailDispatcher {
     }
   }
 
-  private async handleEmailDispatch(lead: ProspectMasterRecord): Promise<{ success: boolean; channel: string; mode: string }> {
+  private async handleEmailDispatch(lead: ProspectMasterRecord): Promise<{ success: boolean; channel: string; mode: string; message: string }> {
     const today = new Date().toISOString().split('T')[0];
 
-    if (CONFIG.gmail.draftModeOnly) {
-      console.log(`[GmailDispatcher] [DRAFT MODE ACTIVE] Creating Gmail Draft for ${lead.email}...`);
-      console.log(`To: ${lead.email}`);
-      console.log(`Subject: Inbound triage between ${lead.company} advisory sessions`);
-      console.log(`Content:\n${lead.draftEmail}\n`);
-
-      lead.status = 'Contacted';
-      lead.dateContacted = today;
-      lead.notes = `${lead.notes} | Gmail draft created safely on ${today}`;
+    if (!lead.email) {
+      lead.notes = `${lead.notes ? lead.notes + "\n" : ""}Approved ${today}; no email address yet, so no Gmail draft`;
       dbClient.upsert(lead);
+      return { success: true, channel: 'email', mode: 'no_email', message: 'Approved. No email address for this lead yet, so no Gmail draft was made.' };
+    }
+    if (!lead.draftEmail?.trim() || lead.draftEmail.includes('[NOT RECOMMENDED')) {
+      lead.notes = `${lead.notes ? lead.notes + "\n" : ""}Approved ${today}; no email text drafted, so no Gmail draft`;
+      dbClient.upsert(lead);
+      return { success: true, channel: 'email', mode: 'no_draft_text', message: 'Approved. There is no email text for this lead, so no Gmail draft was made.' };
+    }
+    const { subject, body } = splitDraft(lead.draftEmail, `Quick question, ${lead.firstName || lead.fullName}`);
 
-      return { success: true, channel: 'email', mode: 'draft_created' };
+    // Preferred: save the draft inside the rusan@axiomsdigital.com mailbox itself (Hostinger, IMAP).
+    if (mailboxConfigured()) {
+      const folder = await createMailboxDraft({ to: lead.email, subject, body });
+      lead.notes = `${lead.notes ? lead.notes + "\n" : ""}Draft saved ${today} in ${mailboxUser()} (${folder}); send it from that mailbox`;
+      dbClient.upsert(lead);
+      return { success: true, channel: 'email', mode: 'draft_created', message: `Approved. Draft to ${lead.email} is in the Drafts folder of ${mailboxUser()}.` };
     }
 
-    // Live send mode (only triggered when explicitly set in .env)
-    console.log(`[GmailDispatcher] Live send authorized to ${lead.email}`);
-    lead.status = 'Contacted';
-    lead.dateContacted = today;
-    lead.notes = `${lead.notes} | Email dispatched via Gmail on ${today}`;
+    // Fallback: Gmail draft (personal Gmail, sent as rusan@ through Send-As).
+    if (!gmailApiConfigured()) {
+      lead.notes = `${lead.notes ? lead.notes + "\n" : ""}Approved ${today}; no mailbox connected, so no draft`;
+      dbClient.upsert(lead);
+      return { success: true, channel: 'email', mode: 'gmail_not_connected', message: 'Approved. No mailbox is connected here, so no draft was made.' };
+    }
+    const draftId = await createGmailDraft({ to: lead.email, subject, body });
+    lead.notes = `${lead.notes ? lead.notes + "\n" : ""}Gmail draft created ${today} (id ${draftId}); send it from Gmail`;
     dbClient.upsert(lead);
-
-    return { success: true, channel: 'email', mode: 'live_sent' };
+    return { success: true, channel: 'email', mode: 'draft_created', message: `Approved. Email draft to ${lead.email} is in your Gmail Drafts.` };
   }
 
   private async handleSocialManualDispatch(
     lead: ProspectMasterRecord,
     channel: string
-  ): Promise<{ success: boolean; channel: string; mode: string }> {
+  ): Promise<{ success: boolean; channel: string; mode: string; message: string }> {
     const today = new Date().toISOString().split('T')[0];
     console.log(`[GmailDispatcher] Preparing manual ${channel.toUpperCase()} dispatch task for ${lead.fullName}`);
     console.log(`Profile: ${lead.linkedInUrl || lead.instagramUrl || lead.xUrl}`);
@@ -65,10 +75,10 @@ export class GmailDispatcher {
 
     lead.status = 'Contacted';
     lead.dateContacted = today;
-    lead.notes = `${lead.notes} | Manual ${channel} task logged on ${today}`;
+    lead.notes = `${lead.notes ? lead.notes + "\n" : ""}Manual ${channel} task logged on ${today}`;
     dbClient.upsert(lead);
 
-    return { success: true, channel, mode: 'manual_task_logged' };
+    return { success: true, channel, mode: 'manual_task_logged', message: `Approved. Send the ${channel} message by hand (marked as contacted).` };
   }
 }
 

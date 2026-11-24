@@ -71,7 +71,7 @@ flowchart TD
 ## 3. Component Breakdown: What Was Built & What Their Jobs Are
 
 ### Subsystem 1: Ingestion & Discovery Layer
-* **Files**: [`src/discovery/search-scraper.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/discovery/search-scraper.ts), [`src/webhook-server.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/webhook-server.ts)
+* **Files**: [`src/discovery/search-scraper.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/discovery/search-scraper.ts), [`src/webhook-server.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/webhook-server.ts)
 * **What It Is**: The entry gateway that accepts raw prospect leads from Apify scrapers, Google searches, CSV imports, or webhook POSTs.
 * **How It Was Created**: Built on Node.js/TypeScript using native HTTP endpoints and structured JSON parsers.
 * **Its Job**: Normalizes diverse raw payloads (names, websites, company names, snippets, social URLs) into a standardized `ProspectMasterRecord`.
@@ -79,7 +79,7 @@ flowchart TD
 ---
 
 ### Subsystem 2: 6-Tier Deduplication Engine
-* **Files**: [`src/dedup/dedup-engine.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/dedup/dedup-engine.ts), n8n Code Node 5
+* **Files**: [`src/dedup/dedup-engine.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/dedup/dedup-engine.ts), n8n Code Node 5
 * **What It Is**: An automated gatekeeper that guarantees no prospect ever receives duplicate outreach.
 * **How It Was Created**: A cascading hierarchy of clean string/regex comparisons checking the entire existing database before any processing occurs.
 * **Its Job**: Evaluates 6 sequential tiers:
@@ -93,7 +93,7 @@ flowchart TD
 ---
 
 ### Subsystem 3: 0–100 Deterministic ICP Scoring Engine
-* **Files**: [`src/scoring/scoring-engine.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/scoring/scoring-engine.ts), n8n Code Node 7
+* **Files**: [`src/scoring/scoring-engine.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/scoring/scoring-engine.ts), n8n Code Node 7
 * **What It Is**: An objective algorithmic evaluator that scores prospects based on verified business signals rather than AI guesswork.
 * **How It Was Created**: Six weighted scoring categories totaling 100 points:
   * **Economic Value (0–25 pts)**: Verified \$25k+ corporate retainers = 25 pts, \$10k–\$25k = 20 pts, <\$5k = 0–5 pts.
@@ -111,7 +111,7 @@ flowchart TD
 ---
 
 ### Subsystem 4: Multi-Channel Outbound Personalization Engine
-* **Files**: [`src/outreach/personalization.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/outreach/personalization.ts), [`src/ai/prompts.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/ai/prompts.ts), [`src/ai/openrouter.ts`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/ai/openrouter.ts)
+* **Files**: [`src/outreach/personalization.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/outreach/personalization.ts), [`src/ai/prompts.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/ai/prompts.ts), [`src/ai/openrouter.ts`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/ai/openrouter.ts)
 * **What It Is**: The core messaging engine that crafts tailored outreach across **all 4 platforms**.
 * **How It Was Created**: 
   * Powered by OpenRouter AI (`nvidia/nemotron-3-super-120b`, Claude 3.5 Sonnet, or GPT-4o) with an automated deterministic fallback engine for 100% uptime.
@@ -140,7 +140,7 @@ flowchart TD
 ---
 
 ### Subsystem 5: Pre-Flight Rule Validator
-* **Files**: [`src/outreach/personalization.ts:validateOutreach`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/outreach/personalization.ts#L170)
+* **Files**: [`src/outreach/personalization.ts:validateOutreach`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/outreach/personalization.ts#L170)
 * **What It Is**: An automated quality assurance firewall that reviews copy *before* it reaches the human review stage.
 * **How It Was Created**: Strict regex, word-counter, and cliché-auditor.
 * **Its Job**:
@@ -152,7 +152,7 @@ flowchart TD
 ---
 
 ### Subsystem 6: Multi-Channel Sequencing & Stop-on-Reply Guardrail
-* **Files**: [`src/outreach/personalization.ts:recommendSequence`](file:///Users/rusan/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/outreach/personalization.ts#L399)
+* **Files**: [`src/outreach/personalization.ts:recommendSequence`](file://~/Documents/Google%20anti-gravity%20projects/lead-gen-system/src/outreach/personalization.ts#L399)
 * **What It Is**: The cadence scheduler that spaces out touchpoints over 12 days.
 * **Its Job**:
   * **Day 1**: Personalized Email

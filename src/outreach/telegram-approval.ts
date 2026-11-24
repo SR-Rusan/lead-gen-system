@@ -129,7 +129,7 @@ To take action, reply:
 
     if (action === 'approve') {
       lead.status = 'Approved';
-      lead.notes = `${lead.notes} | Approved via Telegram human review on ${new Date().toISOString().split('T')[0]}`;
+      lead.notes = `${lead.notes ? lead.notes + '\n' : ''}Approved ${new Date().toISOString().split('T')[0]}.`;
       console.log(`[TelegramApproval] Lead ${lead.fullName} (${leadId}) marked as APPROVED`);
     } else {
       lead.status = 'Rejected';

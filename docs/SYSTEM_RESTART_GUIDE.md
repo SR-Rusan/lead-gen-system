@@ -10,13 +10,13 @@ Run these two commands to bring all services back online:
 
 ### Command 1: Start n8n Local Automation Engine (Port 5678)
 ```bash
-cd "/Users/rusan/Documents/Google anti-gravity projects/lead-gen-system"
-N8N_PORT=5678 N8N_HOST=localhost N8N_WEBHOOK_URL=http://localhost:5678/ /Users/rusan/node/bin/n8n start
+cd "~/Documents/Google anti-gravity projects/lead-gen-system"
+N8N_PORT=5678 N8N_HOST=localhost N8N_WEBHOOK_URL=http://localhost:5678/ ~/node/bin/n8n start
 ```
 
 ### Command 2: Start Webhook Server & Live Command Dashboard (Port 3001)
 ```bash
-cd "/Users/rusan/Documents/Google anti-gravity projects/lead-gen-system"
+cd "~/Documents/Google anti-gravity projects/lead-gen-system"
 npm run server
 ```
 
@@ -36,7 +36,7 @@ Once started, your live control endpoints are:
 
 ## 3. What Was Built & Saved in This Project
 
-Everything has been committed to disk in your workspace directory (`/Users/rusan/Documents/Google anti-gravity projects/lead-gen-system`):
+Everything has been committed to disk in your workspace directory (`~/Documents/Google anti-gravity projects/lead-gen-system`):
 
 1. **Multi-Channel Personalization Engine**:
    * [`src/outreach/personalization.ts`](../src/outreach/personalization.ts): Single personalization layer generating Email (80–120w, A/B CTA testing), LinkedIn (3 touches), Instagram (2 touches), X (3 touches), or `not_recommended` tags. Includes Pre-Flight Validation (`validateOutreach`).

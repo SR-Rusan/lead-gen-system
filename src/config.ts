@@ -39,10 +39,10 @@ export const CONFIG = {
 
   // Google Sheets Master Database
   google: {
-    sheetId: process.env.GOOGLE_SHEET_ID || '1LvSouAG9b0dF5ndwqp7HckefIaBYZV4ePlm0L7_lIqw',
+    sheetId: process.env.GOOGLE_SHEET_ID || 'YOUR_GOOGLE_SHEET_ID',
     sheetTabName: process.env.GOOGLE_SHEET_TAB_NAME || 'Master_Prospects',
     analyticsTabName: process.env.GOOGLE_SHEET_ANALYTICS_TAB || 'Funnel_Analytics',
-    credentialsDir: process.env.GDRIVE_CREDS_DIR || '/Users/rusan/.config/gdrive',
+    credentialsDir: process.env.GDRIVE_CREDS_DIR || '~/.config/gdrive',
   },
 
   // Human-in-the-Loop Telegram Notifications & Approval

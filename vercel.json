@@ -1,0 +1,37 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install",
+  "buildCommand": "mkdir -p public && cp assets/favicon-32.png assets/favicon.png assets/apple-touch-icon.png public/ && echo 'User-agent: *\nDisallow: /' > public/robots.txt",
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 300,
+      "includeFiles": "src/**"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/finder",
+      "schedule": "0 10 * * 1-5"
+    },
+    {
+      "path": "/api/cron/finder?run=2",
+      "schedule": "0 11 * * 1-5"
+    },
+    {
+      "path": "/api/cron/digest",
+      "schedule": "0 12 * * 1-5"
+    },
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 17 * * 1-5"
+    }
+  ]
+}

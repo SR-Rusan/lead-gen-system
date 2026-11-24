@@ -13,7 +13,14 @@
     "scrape:n8n": "ts-node scripts/scrape_to_n8n.ts",
     "qualify": "ts-node -e \"import { runQualificationPipeline } from './src/index'; runQualificationPipeline();\"",
     "approval:telegram": "ts-node src/outreach/telegram-approval.ts",
-    "analytics": "ts-node -e \"import { printAnalyticsDashboard } from './src/analytics/analytics-engine'; printAnalyticsDashboard();\""
+    "analytics": "ts-node -e \"import { printAnalyticsDashboard } from './src/analytics/analytics-engine'; printAnalyticsDashboard();\"",
+    "set-password": "ts-node scripts/set_password.ts",
+    "db:push": "ts-node scripts/db_sync.ts push",
+    "db:pull": "ts-node scripts/db_sync.ts pull",
+    "connect-gmail": "ts-node scripts/connect_gmail.ts",
+    "find-leads": "ts-node scripts/find_leads.ts",
+    "rewrite-drafts": "ts-node scripts/rewrite_drafts.ts",
+    "connect-mailbox": "ts-node scripts/connect_mailbox.ts"
   },
   "keywords": [
     "b2b",
@@ -27,10 +34,15 @@
   "author": "Executive Lead Intake System",
   "license": "MIT",
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "imapflow": "^2.12.2",
+    "nodemailer": "10.4.0",
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
+    "@types/imapflow": "^1.0.23",
     "@types/node": "^22.13.1",
+    "@types/nodemailer": "^8.0.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }

@@ -1,20 +1,9 @@
-node_modules/
-dist/
-build/
+.vercel
 .env
 .env.*
 !.env.example
-*.log
-.DS_Store
-__pycache__/
-venv/
-.venv/
-*.mp4
-*.mov
-*.wav
-*.mp3
-credentials*.json
-token*.json
-
-# private lead data
+node_modules
 data/
+.DS_Store
+*.pem
+*.key

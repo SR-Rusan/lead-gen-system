@@ -1,0 +1,10 @@
+.env
+.env.*
+data
+node_modules
+n8n-workflows
+docs
+templates
+tests
+*.md
+.DS_Store

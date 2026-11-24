@@ -8,7 +8,7 @@
 
 ```bash
 # 1. Start n8n Local Engine (Port 5678)
-N8N_PORT=5678 N8N_HOST=localhost N8N_WEBHOOK_URL=http://localhost:5678/ /Users/rusan/node/bin/n8n start
+N8N_PORT=5678 N8N_HOST=localhost N8N_WEBHOOK_URL=http://localhost:5678/ ~/node/bin/n8n start
 
 # 2. Start Webhook Server & Live Dashboard (Port 3001)
 npm run server
@@ -207,7 +207,7 @@ lead-gen-system/
 
 ### 1. Run Complete End-to-End Test Suite
 ```bash
-cd "/Users/rusan/Documents/Google anti-gravity projects/lead-gen-system"
+cd "~/Documents/Google anti-gravity projects/lead-gen-system"
 npm test
 ```
 *Executes all 8 stages: discovery -> deduplication -> scoring -> qualification -> deep research -> Telegram review card -> Gmail draft -> funnel analytics.*
